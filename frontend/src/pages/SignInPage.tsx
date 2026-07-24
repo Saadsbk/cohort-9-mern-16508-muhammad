@@ -43,7 +43,6 @@ export default function SignInPage() {
 		onSuccess: () => {
 			toast.add({
 				title: "Signed in successful",
-				description: "Redirecting to your dashboard...",
 				type: "success",
 			});
 		},

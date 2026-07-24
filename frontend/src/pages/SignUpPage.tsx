@@ -47,7 +47,6 @@ export default function SignUpPage() {
 		onSuccess: () => {
 			toast.add({
 				title: "Sign up successful",
-				description: "Redirecting to your dashboard...",
 				type: "success",
 			});
 		},
