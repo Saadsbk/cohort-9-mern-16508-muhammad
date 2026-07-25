@@ -46,9 +46,10 @@ export default function SignInPage() {
 				type: "success",
 			});
 		},
-		onError: () => {
+		onError: (error) => {
 			toast.add({
 				title: "Sign in failed",
+				description: error.message,
 				type: "error",
 			});
 		},
