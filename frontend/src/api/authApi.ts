@@ -2,6 +2,7 @@ import axios from "axios";
 import type { SignInFormValues } from "@/schemas/signInSchema";
 import type { SignUpFormValues } from "@/schemas/signUpSchema";
 import stripAxiosError from "@/lib/errorHandlers";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 // May change during develpment
 export type SignInResponse = {
@@ -20,11 +21,11 @@ export type SignUpResponse = {
  */
 export async function signInUser(data: SignInFormValues): Promise<SignInResponse> {
 try {
-  const response = await axios.post<SignInResponse>("/api/auth/sign-in", data);
+  const response = await axios.post<SignInResponse>(`${BACKEND_URL}/api/auth/sign-in`, data);
   return response.data;
 	} catch (error) {
 		if (axios.isAxiosError(error)) {
-			throw new Error(stripAxiosError(error, "Unable to sign in"), {
+			throw new Error(stripAxiosError(error, error.message), {
 				cause: error,
 			});
 		}
@@ -38,11 +39,11 @@ try {
  */
 export async function signUpUser(data: SignUpFormValues): Promise<SignUpResponse> {
 try {
-  	const response = await axios.post<SignUpResponse>("/api/auth/sign-up", data);
+  	const response = await axios.post<SignUpResponse>(`${BACKEND_URL}/api/auth/sign-up`, data);
 		return response.data;
 	} catch (error) {
 		if (axios.isAxiosError(error)) {
-			throw new Error(stripAxiosError(error, "Unable to sign up"), {
+			throw new Error(stripAxiosError(error, error.message), {
 				cause: error,
 			});
 		}

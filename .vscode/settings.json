@@ -1,4 +1,6 @@
 {
 	"editor.defaultFormatter": "esbenp.prettier-vscode",
-	"editor.formatOnPaste": true
+	"editor.formatOnPaste": true,
+	"js/ts.implicitProjectConfig.target": "ESNext",
+	"typescript.tsdk": "./backend/node_modules/typescript/lib"
 }
