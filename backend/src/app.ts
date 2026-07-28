@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import apiRouter from "./routes/index.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
+import helmet from "helmet";
 
 dotenv.config();
 
@@ -11,6 +12,9 @@ const app = express();
 const corsOptions = {
 	origin: process.env.FRONTEND_URL ?? "http://localhost:5173",
 };
+
+app.use(helmet())
+
 app.use(cors(corsOptions));
 
 app.use(express.json());

@@ -29,9 +29,10 @@ export const errorHandler: ErrorRequestHandler = (
 	res: Response<ApiResponse<never>>,
 	_next: NextFunction,
 ): void => {
-	const statusCode = error instanceof ApiError ? error.statusCode : 500;
-	const message = error instanceof Error ? error.message : "Internal Server Error";
-	const details = error instanceof ApiError ? error.details : undefined;
+	const isApiError = error instanceof ApiError;
+	const statusCode = isApiError ? error.statusCode : 500;
+	const message = isApiError ? error.message : "Internal Server Error";
+	const details = isApiError ? error.details : undefined;
 
 	res.status(statusCode).json(createErrorResponse(message, details));
 };
