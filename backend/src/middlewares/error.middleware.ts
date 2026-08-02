@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler, NextFunction, Request, Response } from "express";
 import { ApiError } from "../utils/apiError.ts";
-import { createErrorResponse, type ApiResponse } from "../utils/apiResponse.js";
+import { createErrorResponse, type ApiResponse } from "../utils/apiResponse.ts";
+import { ZodError, z } from "zod";
 
 /**
  * Handles requests that do not match any registered route.
@@ -33,6 +34,24 @@ export const errorHandler: ErrorRequestHandler = (
 	const statusCode = isApiError ? error.statusCode : 500;
 	const message = isApiError ? error.message : "Internal Server Error";
 	const details = isApiError ? error.details : undefined;
+
+	if (error instanceof ZodError) {
+		const apiError = new ApiError(
+			400,
+			"Validation Failed",
+			z.treeifyError(error),
+			error,
+		);
+
+		res
+			.status(apiError.statusCode)
+			.json(createErrorResponse(apiError.message, apiError.details));
+		return;
+	}
+
+	if (!isApiError) {
+		console.error("Unhandled Server Error:", error);
+	}
 
 	res.status(statusCode).json(createErrorResponse(message, details));
 };
