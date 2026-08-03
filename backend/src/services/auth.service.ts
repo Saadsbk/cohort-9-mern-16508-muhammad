@@ -244,9 +244,13 @@ export async function deleteUserService(refreshToken: string, password: string):
 			throw new ApiError(401, "Invalid credentials");
 		}
 
+		if (tokenRecord.userId !== payload.userId) {
+			throw new ApiError(403, "Invalid refresh token");
+		}
+
 		await db.transaction(async (tx) => {
 			await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken));
-			await tx.delete(users).where(eq(users.id, payload.userId));
+			await tx.delete(users).where(eq(users.id, user.id));
 		});
 	} catch (error) {
 		if (error instanceof ApiError) {

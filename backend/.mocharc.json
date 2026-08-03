@@ -1,5 +1,6 @@
 {
   "import": "tsx",
+  "file": "tests/setup.ts",
   "spec": "tests/**/*.test.ts",
   "timeout": 10000
 }

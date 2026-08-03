@@ -1,10 +1,10 @@
-import jwt, { type SignOptions } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import { env } from "./env.ts";
 
 const ACCESS_SECRET = env.JWT_ACCESS_TOKEN_SECRET;
 const REFRESH_SECRET = env.JWT_REFRESH_TOKEN_SECRET;
-const ACCESS_TOKEN_EXPIRY = env.JWT_ACCESS_TOKEN_EXPIRY as NonNullable<SignOptions["expiresIn"]>;
-const REFRESH_TOKEN_EXPIRY = env.JWT_REFRESH_TOKEN_EXPIRY as NonNullable<SignOptions["expiresIn"]>;
+const ACCESS_TOKEN_EXPIRY = env.JWT_ACCESS_TOKEN_EXPIRY;
+const REFRESH_TOKEN_EXPIRY = env.JWT_REFRESH_TOKEN_EXPIRY;
 const REFRESH_TOKEN_MAX_AGE_MS = env.JWT_REFRESH_TOKEN_MAX_AGE_MS;
 
 export type TokenPayload = { userId: string };

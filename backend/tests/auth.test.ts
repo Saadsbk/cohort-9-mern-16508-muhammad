@@ -1,4 +1,3 @@
-process.env.NODE_ENV = "test";
 import supertest from "supertest";
 import { assert } from "chai";
 import app from "../src/app.ts";
@@ -96,10 +95,11 @@ describe("Authentication API Integration Test Suite", () => {
 				assert.isString(body.data.accessToken);
 			}
 
-			const cookies = res.get("Set-Cookie") as string[];
-			assert.isTrue(cookies.some((c: string) => c.startsWith("refreshToken=")));
+			const cookies = res.get("Set-Cookie");
+			assert.isArray(cookies, "sign-in must set a refresh token cookie");
+			assert.isTrue((cookies ?? []).some((c: string) => c.startsWith("refreshToken=")));
 
-			const rawCookie = cookies.find((c: string) => c.startsWith("refreshToken=")) || "";
+			const rawCookie = (cookies ?? []).find((c: string) => c.startsWith("refreshToken=")) ?? "";
 			refreshTokenCookie = rawCookie.split(";")[0] ?? "";
 		});
 

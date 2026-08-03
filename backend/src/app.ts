@@ -33,7 +33,7 @@ app.use(errorHandler);
 
 
 const PORT = env.PORT;
-const isTestEnv = env.NODE_ENV === "test" || process.argv.some((arg) => arg.includes("mocha"));
+const isTestEnv = env.NODE_ENV === "test";
 
 if (!isTestEnv) {
 	startTokenCleanup();
