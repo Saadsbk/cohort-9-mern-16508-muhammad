@@ -34,6 +34,41 @@ export type SignUpResult = Omit<AuthResult, "user"> & {
 };
 
 /**
+ * Deletes refresh token records whose expiration time is earlier than current time.
+ */
+export async function cleanupExpiredTokens(): Promise<number> {
+	try {
+		const deleted = await db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, new Date())).returning();
+		return deleted.length;
+	} catch (error) {
+		console.error("Error cleaning up expired refresh tokens:", error);
+		return 0;
+	}
+}
+
+let cleanupTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Starts the periodic background cleanup timer for expired refresh tokens.
+ */
+export function startTokenCleanup(): NodeJS.Timeout | null {
+	if (!cleanupTimer) {
+		cleanupTimer = setInterval(() => {
+			cleanupExpiredTokens().catch((err) => {
+				console.error("Periodic token cleanup failed:", err);
+			});
+		}, env.TOKEN_CLEANUP_INTERVAL_MS);
+
+		if (cleanupTimer.unref) {
+			cleanupTimer.unref();
+		}
+	}
+	return cleanupTimer;
+}
+
+const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8pM3rQ8pM3rQ8pM3rQ8pM3rQ8pM3rQ";
+
+/**
  * Authenticates a user using the provided sign-in credentials.
  * @param payload - The sign-in input data of type {@link SignInInput}.
  * @returns A promise resolving to {@link SignInResult}.
@@ -43,8 +78,6 @@ export async function signInService(
 	payload: SignInInput,
 ): Promise<SignInResult> {
 	try {
-		const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8pM3rQ8pM3rQ8pM3rQ8pM3rQ8pM3rQ";
-		
 		const [user] = await db.select().from(users).where(eq(users.username, payload.username));
 		const isPasswordCorrect = await bcrypt.compare(payload.password, user?.passwordHash ?? DUMMY_HASH);
 		if (!user || !isPasswordCorrect) {
@@ -121,34 +154,6 @@ export async function signUpService(
 	}
 }
 
-/**
- * Deletes refresh token records whose expiration time is earlier than current time.
- */
-export async function cleanupExpiredTokens(): Promise<number> {
-	try {
-		const deleted = await db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, new Date())).returning();
-		return deleted.length;
-	} catch (error) {
-		console.error("Error cleaning up expired refresh tokens:", error);
-		return 0;
-	}
-}
-
-// Initialize periodic background token cleanup (skipped during test runs)
-const isTestRun = env.NODE_ENV === "test" || process.argv.some((arg) => arg.includes("mocha"));
-
-if (!isTestRun) {
-	const cleanupTimer = setInterval(() => {
-		cleanupExpiredTokens().catch((err) => {
-			console.error("Periodic token cleanup failed:", err);
-		});
-	}, env.TOKEN_CLEANUP_INTERVAL_MS);
-
-	if (cleanupTimer.unref) {
-		cleanupTimer.unref();
-	}
-}
-
 export async function refreshTokenService(refreshToken: string): Promise<{ accessToken: string, refreshToken: string }> {
 	try {
 		if (!refreshToken) {
@@ -175,9 +180,13 @@ export async function refreshTokenService(refreshToken: string): Promise<{ acces
 		const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
 		
 		await db.transaction(async (tx) => {
-			await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken));
-			await tx.insert(refreshTokens).values({ token: newRefreshToken, userId: tokenRecord.userId, expiresAt});
-		})
+			const deleted = await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken)).returning();
+			if (deleted.length === 0) { // i.e. No row deleted = deplicate request or attack ==> nukes every active refresh token for that userId 
+				await tx.delete(refreshTokens).where(eq(refreshTokens.userId, payload.userId));
+				throw new ApiError(403, "Invalid refresh token");
+			}
+			await tx.insert(refreshTokens).values({ token: newRefreshToken, userId: tokenRecord.userId, expiresAt });
+		});
 
 		return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 
@@ -218,21 +227,21 @@ export async function deleteUserService(refreshToken: string, password: string):
 		const [tokenRecord] = await db
 			.select()
 			.from(refreshTokens)
-			.where(eq(refreshTokens.token, refreshToken))
+			.where(and(eq(refreshTokens.token, refreshToken), gt(refreshTokens.expiresAt, new Date())))
 			.limit(1);
 
 		if (!tokenRecord) {
 			throw new ApiError(403, "Invalid refresh token");
 		}
 
-		const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8pM3rQ8pM3rQ8pM3rQ8pM3rQ8pM3rQ";
+		if (!password || typeof password !== "string" || password.length === 0) {
+			throw new ApiError(400, "Password is required");
+		}
 
-		if (password) {
-			const [user] = await db.select().from(users).where(eq(users.id, tokenRecord.userId)).limit(1);
-			const isPasswordValid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-			if (!user || !isPasswordValid) {
-				throw new ApiError(401, "Invalid credentials");
-			}
+		const [user] = await db.select().from(users).where(eq(users.id, tokenRecord.userId)).limit(1);
+		const isPasswordValid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+		if (!user || !isPasswordValid) {
+			throw new ApiError(401, "Invalid credentials");
 		}
 
 		await db.transaction(async (tx) => {

@@ -21,11 +21,20 @@ describe("Authentication API Integration Test Suite", () => {
 	let createdUserId = "";
 
 	after(async () => {
-		// Clean up created user after tests complete only when createdUserId is populated
-		if (createdUserId) {
-			await db.delete(users).where(eq(users.id, createdUserId));
+		try {
+			// Clean up created user after tests complete only when createdUserId is populated
+			if (createdUserId) {
+				await db.delete(users).where(eq(users.id, createdUserId));
+			}
+		} catch (error) {
+			throw error;
+		} finally {
+			try {
+				await closeDb();
+			} catch (error) {
+				throw error;
+			}
 		}
-		await closeDb();
 	});
 	
 	describe("POST /api/auth/sign-up", () => {
@@ -90,7 +99,8 @@ describe("Authentication API Integration Test Suite", () => {
 			const cookies = res.get("Set-Cookie") as string[];
 			assert.isTrue(cookies.some((c: string) => c.startsWith("refreshToken=")));
 
-			refreshTokenCookie = cookies.find((c: string) => c.startsWith("refreshToken=")) || "";
+			const rawCookie = cookies.find((c: string) => c.startsWith("refreshToken=")) || "";
+			refreshTokenCookie = rawCookie.split(";")[0] ?? "";
 		});
 
 
@@ -168,7 +178,7 @@ describe("Authentication API Integration Test Suite", () => {
 			if (cookies && cookies.length > 0) {
 				const newCookie = cookies.find((c: string) => c.startsWith("refreshToken="));
 				if (newCookie) {
-					refreshTokenCookie = newCookie;
+					refreshTokenCookie = newCookie.split(";")[0] ?? "";
 				}
 			}
 

@@ -13,5 +13,9 @@ export const queryClient = postgres(env.DATABASE_URL, {
 export const db = drizzle({ client: queryClient });
 
 export async function closeDb() {
-	await queryClient.end();
+	try {
+		await queryClient.end();
+	} catch (error) {
+		console.error("Error closing database connection:", error);
+	}
 }

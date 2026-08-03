@@ -30,10 +30,10 @@ export const errorHandler: ErrorRequestHandler = (
 	res: Response<ApiResponse<never>>,
 	_next: NextFunction,
 ): void => {
-	const isApiError = error instanceof ApiError;
-	const statusCode = isApiError ? error.statusCode : 500;
-	const message = isApiError ? error.message : "Internal Server Error";
-	const details = isApiError ? error.details : undefined;
+	const isApiError = error instanceof ApiError || (typeof error === "object" && error !== null && typeof (error as { statusCode?: number }).statusCode === "number");
+	const statusCode = isApiError ? (error as ApiError).statusCode : 500;
+	const message = isApiError ? (error as ApiError).message : "Internal Server Error";
+	const details = isApiError ? (error as ApiError).details : undefined;
 
 	if (error instanceof ZodError) {
 		const apiError = new ApiError(

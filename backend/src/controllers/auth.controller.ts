@@ -123,7 +123,7 @@ export const logoutController = async (
 ): Promise<void> => {
 	try {		
 		validateRequestOrigin(req);
-		const refreshToken = req.cookies?.refreshToken;
+		const refreshToken = readRefreshToken(req);
 
 		if (refreshToken) {
 			await logoutService(refreshToken);
@@ -144,13 +144,16 @@ export const deleteUserController = async (
 ): Promise<void> => {
 	try {
 		validateRequestOrigin(req);
-		const refreshToken = req.cookies?.refreshToken;
+		const refreshToken = readRefreshToken(req);
 
 		if (!refreshToken) {
 			throw new ApiError(401, "Refresh token not provided");
 		}
 
-		const password = typeof req.body?.password === "string" ? req.body.password : "";
+		const password = req.body?.password;
+		if (typeof password !== "string" || password.length === 0) {
+			throw new ApiError(400, "Password is required");
+		}
 		await deleteUserService(refreshToken, password);
 
 		const { httpOnly, secure, sameSite } = getCookieOptions();

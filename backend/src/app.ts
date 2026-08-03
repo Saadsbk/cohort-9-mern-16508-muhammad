@@ -6,6 +6,7 @@ import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.ts
 import helmet from "helmet";
 import cookieParser from 'cookie-parser';
 import { env } from "./utils/env.ts";
+import { startTokenCleanup } from "./services/auth.service.ts";
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ const PORT = env.PORT;
 const isTestEnv = env.NODE_ENV === "test" || process.argv.some((arg) => arg.includes("mocha"));
 
 if (!isTestEnv) {
+	startTokenCleanup();
 	app.listen(PORT, () => {
 		console.log(`Server running at BACKEND_URL : ${env.BACKEND_URL}`);
 	});
