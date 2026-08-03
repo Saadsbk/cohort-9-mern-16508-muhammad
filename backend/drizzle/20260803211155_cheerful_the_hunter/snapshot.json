@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "88655b31-3259-4ab8-adfc-877cd6b15a66",
+  "id": "bc787434-9dae-48a3-bba0-a719745f1ebf",
   "prevIds": [
-    "c6631dee-cc00-47c0-8f22-0c3182bd4960"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -39,7 +39,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "token",
+      "name": "token_hash",
       "entityType": "columns",
       "schema": "public",
       "table": "refresh_tokens"
@@ -248,10 +248,10 @@
     {
       "nameExplicit": false,
       "columns": [
-        "token"
+        "token_hash"
       ],
       "nullsNotDistinct": false,
-      "name": "refresh_tokens_token_key",
+      "name": "refresh_tokens_token_hash_key",
       "schema": "public",
       "table": "refresh_tokens",
       "entityType": "uniques"

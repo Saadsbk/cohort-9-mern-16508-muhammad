@@ -174,12 +174,11 @@ describe("Authentication API Integration Test Suite", () => {
 				assert.isString(body.data.accessToken);
 			}
 
-			const cookies = res.get("Set-Cookie");
-			if (cookies && cookies.length > 0) {
-				const newCookie = cookies.find((c: string) => c.startsWith("refreshToken="));
-				if (newCookie) {
-					refreshTokenCookie = newCookie.split(";")[0] ?? "";
-				}
+			const rawSetCookie = res.get("Set-Cookie");
+			const cookies = Array.isArray(rawSetCookie) ? rawSetCookie : (typeof rawSetCookie === "string" ? [rawSetCookie] : []);
+			const newCookie = cookies.find((c: string) => c.startsWith("refreshToken="));
+			if (newCookie) {
+				refreshTokenCookie = newCookie.split(";")[0] ?? "";
 			}
 
 			// Assert that reusing the pre-rotation cookie returns 403

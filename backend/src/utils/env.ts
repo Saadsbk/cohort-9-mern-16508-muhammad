@@ -17,6 +17,9 @@ function validateExpiry(val: string | undefined, defaultVal: string, keyName: st
 	}
 	const num = Number(raw);
 	if (!Number.isNaN(num)) {
+		if (!Number.isFinite(num) || !Number.isSafeInteger(num)) {
+			throw new Error(`Environment variable ${keyName} must be a finite safe integer.`);
+		}
 		if (num < 0) {
 			throw new Error(`Environment variable ${keyName} must be non-negative.`);
 		}
@@ -39,7 +42,9 @@ if (accessSecret === refreshSecret) {
 const accessTokenExpiry = validateExpiry(process.env.JWT_ACCESS_TOKEN_EXPIRY, "15m", "JWT_ACCESS_TOKEN_EXPIRY");
 const refreshTokenExpiry = validateExpiry(process.env.JWT_REFRESH_TOKEN_EXPIRY, "7d", "JWT_REFRESH_TOKEN_EXPIRY");
 
-function getPositiveIntEnv(key: string, fallback: number): number {
+const MAX_SET_TIMEOUT_MS = 2_147_483_647; // Node.js maximum 32-bit signed integer for timers
+
+function getPositiveIntEnv(key: string, fallback: number, maxMs: number = Number.MAX_SAFE_INTEGER): number {
 	const raw = process.env[key];
 	if (raw === undefined || raw.trim() === "") {
 		return fallback;
@@ -47,15 +52,18 @@ function getPositiveIntEnv(key: string, fallback: number): number {
 	if (!/^\d+$/.test(raw.trim())) {
 		throw new Error(`Environment variable ${key} must be a positive integer number of milliseconds.`);
 	}
-	const parsed = Number.parseInt(raw, 10);
-	if (parsed <= 0) {
-		throw new Error(`Environment variable ${key} must be greater than zero.`);
+	const num = Number(raw);
+	if (!Number.isSafeInteger(num) || num <= 0) {
+		throw new Error(`Environment variable ${key} must be a positive safe integer.`);
 	}
-	return parsed;
+	if (num > maxMs) {
+		throw new Error(`Environment variable ${key} must not exceed ${maxMs} milliseconds.`);
+	}
+	return num;
 }
 
 const refreshTokenMaxAgeMs = getPositiveIntEnv("JWT_REFRESH_TOKEN_MAX_AGE_MS", 7 * 24 * 60 * 60 * 1000);
-const tokenCleanupIntervalMs = getPositiveIntEnv("TOKEN_CLEANUP_INTERVAL_MS", 60 * 60 * 1000);
+const tokenCleanupIntervalMs = getPositiveIntEnv("TOKEN_CLEANUP_INTERVAL_MS", 60 * 60 * 1000, MAX_SET_TIMEOUT_MS);
 
 export const env = {
 	DATABASE_URL: getRequiredEnv("DATABASE_URL"),

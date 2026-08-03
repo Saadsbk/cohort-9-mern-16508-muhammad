@@ -1,5 +1,10 @@
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 import { env } from "./env.ts";
+
+export function hashToken(token: string): string {
+	return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 const ACCESS_SECRET = env.JWT_ACCESS_TOKEN_SECRET;
 const REFRESH_SECRET = env.JWT_REFRESH_TOKEN_SECRET;
@@ -23,8 +28,8 @@ export function generateAccessToken(userId: string) {
 }
 
 export function generateRefreshToken(userId: string) {
-	return jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
-}
+	return jwt.sign({ userId, jti: crypto.randomUUID() }, REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+} // Added jti for edge cases where 2 tokens (for the same user) are generated at the same thime
 
 export function verifyAccessToken(token: string): TokenPayload {
 	return assertTokenPayload(jwt.verify(token, ACCESS_SECRET));

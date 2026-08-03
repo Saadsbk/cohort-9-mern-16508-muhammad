@@ -29,7 +29,7 @@ export const users = pgTable("users", {
 
 export const refreshTokens = pgTable("refresh_tokens", {
   id: uuid("id").defaultRandom().primaryKey(),
-  token: text("token").notNull().unique(),
+  tokenHash: text("token_hash").notNull().unique(),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

@@ -7,7 +7,7 @@ import { db } from "../index.ts";
 import { users, refreshTokens } from "../db/schema/schema.ts";
 import { and, eq, gt, lt, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
-import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_MAX_AGE_MS, verifyRefreshToken } from "../utils/jwt.ts";
+import { generateAccessToken, generateRefreshToken, hashToken, REFRESH_TOKEN_MAX_AGE_MS, verifyRefreshToken } from "../utils/jwt.ts";
 import jwt from "jsonwebtoken";
 import { env } from "../utils/env.ts";
 
@@ -88,7 +88,7 @@ export async function signInService(
 		const refreshToken = generateRefreshToken(user.id);
 
 		const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);	
-		await db.insert(refreshTokens).values({ token: refreshToken, userId: user.id, expiresAt });
+		await db.insert(refreshTokens).values({ tokenHash: hashToken(refreshToken), userId: user.id, expiresAt });
 
 		return {
 			accessToken: accessToken,
@@ -161,11 +161,12 @@ export async function refreshTokenService(refreshToken: string): Promise<{ acces
 		}
 
 		const payload = verifyRefreshToken(refreshToken);
+		const tokenHash = hashToken(refreshToken);
 
 		const [tokenRecord] = await db
 			.select()
 			.from(refreshTokens)
-			.where(and(eq(refreshTokens.token, refreshToken), gt(refreshTokens.expiresAt, new Date())))
+			.where(and(eq(refreshTokens.tokenHash, tokenHash), gt(refreshTokens.expiresAt, new Date())))
 			.limit(1);
 		
 		if (!tokenRecord) {
@@ -180,12 +181,12 @@ export async function refreshTokenService(refreshToken: string): Promise<{ acces
 		const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
 		
 		await db.transaction(async (tx) => {
-			const deleted = await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken)).returning();
-			if (deleted.length === 0) { // i.e. No row deleted = deplicate request or attack ==> nukes every active refresh token for that userId 
+			const deleted = await tx.delete(refreshTokens).where(eq(refreshTokens.tokenHash, tokenHash)).returning();
+			if (deleted.length === 0) { // i.e. No row deleted = duplicate request or attack ==> nukes every active refresh token for that userId 
 				await tx.delete(refreshTokens).where(eq(refreshTokens.userId, payload.userId));
 				throw new ApiError(403, "Invalid refresh token");
 			}
-			await tx.insert(refreshTokens).values({ token: newRefreshToken, userId: tokenRecord.userId, expiresAt });
+			await tx.insert(refreshTokens).values({ tokenHash: hashToken(newRefreshToken), userId: tokenRecord.userId, expiresAt });
 		});
 
 		return { accessToken: newAccessToken, refreshToken: newRefreshToken };
@@ -210,7 +211,8 @@ export async function refreshTokenService(refreshToken: string): Promise<{ acces
 
 export async function logoutService(refreshToken: string): Promise<void> {
 	try {
-		await db.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken));
+		const tokenHash = hashToken(refreshToken);
+		await db.delete(refreshTokens).where(eq(refreshTokens.tokenHash, tokenHash));
 	} catch (error) {
 		throw new ApiError(500, "Error occurred while logging out", null, error);
 	}
@@ -223,11 +225,12 @@ export async function deleteUserService(refreshToken: string, password: string):
 		}
 
 		const payload = verifyRefreshToken(refreshToken);
+		const tokenHash = hashToken(refreshToken);
 
 		const [tokenRecord] = await db
 			.select()
 			.from(refreshTokens)
-			.where(and(eq(refreshTokens.token, refreshToken), gt(refreshTokens.expiresAt, new Date())))
+			.where(and(eq(refreshTokens.tokenHash, tokenHash), gt(refreshTokens.expiresAt, new Date())))
 			.limit(1);
 
 		if (!tokenRecord) {
@@ -249,7 +252,7 @@ export async function deleteUserService(refreshToken: string, password: string):
 		}
 
 		await db.transaction(async (tx) => {
-			await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken));
+			await tx.delete(refreshTokens).where(eq(refreshTokens.tokenHash, tokenHash));
 			await tx.delete(users).where(eq(users.id, user.id));
 		});
 	} catch (error) {
