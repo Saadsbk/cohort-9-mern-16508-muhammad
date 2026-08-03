@@ -32,7 +32,7 @@ describe("Authentication API Integration Test Suite", () => {
 			try {
 				await closeDb();
 			} catch (error) {
-				throw error;
+				console.error("Database close failed during test teardown:", error);
 			}
 		}
 	});
