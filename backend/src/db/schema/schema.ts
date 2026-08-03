@@ -4,6 +4,7 @@ import {
 	varchar,
 	timestamp,
 	text,
+	index,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -32,6 +33,8 @@ export const refreshTokens = pgTable("refresh_tokens", {
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("refresh_tokens_user_id_idx").on(table.userId),
+]);

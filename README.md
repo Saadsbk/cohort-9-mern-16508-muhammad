@@ -24,19 +24,12 @@ Cohort 9 — MERN (NodeJS+ReactJS) assignment for Muhammad Saad Bin Khalid
 - **`npm`**
 
 ### 1. Running the Backend
-Navigate to the `backend` directory, install dependencies, set up the env file, and start the development server:
-```bash
-cd backend
-npm install
-npm run db:migrate
-npm run dev
-```
-
-Create a local `.env` (for ./backend) from `backend/.env.example` before running the app. The backend reads the following values:
+Create a local `.env` (in `./backend`) from `backend/.env.example` first. The backend reads the following values:
 
 ```env
 DATABASE_URL=
 BACKEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 PORT=3000
 NODE_ENV=development
 JWT_ACCESS_TOKEN_SECRET=
@@ -44,6 +37,14 @@ JWT_REFRESH_TOKEN_SECRET=
 JWT_ACCESS_TOKEN_EXPIRY=15m
 JWT_REFRESH_TOKEN_EXPIRY=7d
 JWT_REFRESH_TOKEN_MAX_AGE_MS=604800000
+```
+
+Then navigate to the `backend` directory, install dependencies, apply migrations, and start the development server:
+```bash
+cd backend
+npm install
+npm run db:migrate
+npm run dev
 ```
 
 Drizzle ORM uses `DATABASE_URL` (PostgreSQL) for schema generation and migrations.
@@ -65,4 +66,4 @@ cd frontend
 npm install
 npm run dev
 ```
-Open the browser at `http://localhost:5173` (or the printed URL in your terminal).t `http://localhost:5173` (or the printed URL in your terminal).
+Open the browser at `http://localhost:5173` (or the printed URL in your terminal).

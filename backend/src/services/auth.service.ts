@@ -5,10 +5,11 @@ import {
 import { ApiError } from "../utils/apiError.ts";
 import { db } from "../index.ts";
 import { users, refreshTokens } from "../db/schema/schema.ts";
-import { eq, or } from "drizzle-orm";
+import { and, eq, gt, lt, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_MAX_AGE_MS, verifyRefreshToken } from "../utils/jwt.ts";
 import jwt from "jsonwebtoken";
+import { env } from "../utils/env.ts";
 
 export type AuthUser = {
 	id: string;
@@ -41,66 +42,111 @@ export type SignUpResult = Omit<AuthResult, "user"> & {
 export async function signInService(
 	payload: SignInInput,
 ): Promise<SignInResult> {
+	try {
+		const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8pM3rQ8pM3rQ8pM3rQ8pM3rQ8pM3rQ";
+		
+		const [user] = await db.select().from(users).where(eq(users.username, payload.username));
+		const isPasswordCorrect = await bcrypt.compare(payload.password, user?.passwordHash ?? DUMMY_HASH);
+		if (!user || !isPasswordCorrect) {
+			throw new ApiError(401, "Invalid credentials");
+		}
+		
+		const accessToken = generateAccessToken(user.id);
+		const refreshToken = generateRefreshToken(user.id);
 
-	const [user] = await db.select().from(users).where(eq(users.username, payload.username));
+		const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);	
+		await db.insert(refreshTokens).values({ token: refreshToken, userId: user.id, expiresAt });
 
-	if (!user) {
-		throw new ApiError(404, "User does not exist");
+		return {
+			accessToken: accessToken,
+			refreshToken: refreshToken,
+			message: "Signed in successfully",
+			user: {
+				id: user.id,
+				email: user.email,
+				username: user.username,
+			},
+		};
+	} catch (error) {
+		if (error instanceof ApiError) {
+			throw error;
+		}
+		throw new ApiError(500, "Error occurred while signing in", null, error);
 	}
-
-	const isPasswordCorrect = await bcrypt.compare(payload.password,user.passwordHash);
-
-	if (!isPasswordCorrect) {
-		throw new ApiError(401, "Invalid credentials");
-	}
-	
-	const accessToken = generateAccessToken(user.id);
-	const refreshToken = generateRefreshToken(user.id);
-
-	const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);	
-  await db.insert(refreshTokens).values({ token: refreshToken, userId: user.id, expiresAt });
-
-	return {
-		accessToken: accessToken,
-		refreshToken : refreshToken,
-		message: "Signed in successfully",
-		user: {
-			id: user.id,
-			email: user.email,
-			username: user.username,
-		},
-	};
 }
 
 /**
  * Registers a new user with the provided sign-up payload.
  * @param payload - The sign-up input data of type {@link SignUpInput}.
  * @returns A promise resolving to {@link SignUpResult}.
- * @throws An {@link ApiError} When the email already exists.
+ * @throws An {@link ApiError} When the email or username already exists.
  */
 export async function signUpService(
 	payload: SignUpInput,
 ): Promise<SignUpResult> {
-	const [user] = await db.select().from(users).where(or(eq(users.username, payload.username), eq(users.email, payload.email)),
-		);
+	try {
+		const [user] = await db.select().from(users).where(or(eq(users.username, payload.username), eq(users.email, payload.email)));
 
-	if (user) {
-		throw new ApiError(400, "User already exists");
+		if (user) {
+			throw new ApiError(400, "User already exists");
+		}
+
+		const hashedPassword = await bcrypt.hash(payload.password, 10);
+
+		const [newUser]: (typeof users.$inferSelect)[] = await db.insert(users)
+			.values({
+				email: payload.email,
+				username: payload.username,
+				passwordHash: hashedPassword,
+			}).returning();
+
+		if (!newUser) {
+			throw new ApiError(500, "Failed to create user");
+		}
+
+		return {
+			message: "Signed up successfully",
+			userId: newUser.id,
+		};
+	} catch (error) {
+		if (error instanceof ApiError) {
+			throw error;
+		}
+
+		if (typeof error === "object" && error !== null && (error as { code?: string }).code === "23505") {
+			throw new ApiError(400, "User already exists");
+		}
+
+		throw new ApiError(500, "Error occurred while signing up", null, error);
 	}
+}
 
-	const hashedPassword = await bcrypt.hash(payload.password, 10);
+/**
+ * Deletes refresh token records whose expiration time is earlier than current time.
+ */
+export async function cleanupExpiredTokens(): Promise<number> {
+	try {
+		const deleted = await db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, new Date())).returning();
+		return deleted.length;
+	} catch (error) {
+		console.error("Error cleaning up expired refresh tokens:", error);
+		return 0;
+	}
+}
 
-	const [newUser] = await db.insert(users)
-		.values({
-			email: payload.email,
-			username: payload.username,
-			passwordHash: hashedPassword,
-		}).returning();
+// Initialize periodic background token cleanup (skipped during test runs)
+const isTestRun = env.NODE_ENV === "test" || process.argv.some((arg) => arg.includes("mocha"));
 
-	return {
-		message: "Signed up successfully",
-		userId: newUser ? newUser.id : "",
-	};
+if (!isTestRun) {
+	const cleanupTimer = setInterval(() => {
+		cleanupExpiredTokens().catch((err) => {
+			console.error("Periodic token cleanup failed:", err);
+		});
+	}, env.TOKEN_CLEANUP_INTERVAL_MS);
+
+	if (cleanupTimer.unref) {
+		cleanupTimer.unref();
+	}
 }
 
 export async function refreshTokenService(refreshToken: string): Promise<{ accessToken: string, refreshToken: string }> {
@@ -110,15 +156,17 @@ export async function refreshTokenService(refreshToken: string): Promise<{ acces
 		}
 
 		const payload = verifyRefreshToken(refreshToken);
-		// console.log("Payload from Refresh Token:", payload);
 
 		const [tokenRecord] = await db
 			.select()
 			.from(refreshTokens)
-			.where(eq(refreshTokens.token, refreshToken))
+			.where(and(eq(refreshTokens.token, refreshToken), gt(refreshTokens.expiresAt, new Date())))
 			.limit(1);
 		
 		if (!tokenRecord) {
+			// The signature is valid but the row is gone or expired. Treat this as reuse of a
+			// rotated token and revoke every session for the user.
+			await db.delete(refreshTokens).where(eq(refreshTokens.userId, payload.userId));
 			throw new ApiError(403, "Invalid refresh token");
 		}
 
@@ -128,7 +176,7 @@ export async function refreshTokenService(refreshToken: string): Promise<{ acces
 		
 		await db.transaction(async (tx) => {
 			await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken));
-			await tx.insert(refreshTokens).values({ token: newRefreshToken, userId: payload.userId, expiresAt});
+			await tx.insert(refreshTokens).values({ token: newRefreshToken, userId: tokenRecord.userId, expiresAt});
 		})
 
 		return { accessToken: newAccessToken, refreshToken: newRefreshToken };
@@ -159,7 +207,7 @@ export async function logoutService(refreshToken: string): Promise<void> {
 	}
 }
 
-export async function deleteUserService(refreshToken: string): Promise<void> {
+export async function deleteUserService(refreshToken: string, password: string): Promise<void> {
 	try {
 		if (!refreshToken) {
 			throw new ApiError(401, "Refresh token not provided");
@@ -177,6 +225,16 @@ export async function deleteUserService(refreshToken: string): Promise<void> {
 			throw new ApiError(403, "Invalid refresh token");
 		}
 
+		const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8pM3rQ8pM3rQ8pM3rQ8pM3rQ8pM3rQ";
+
+		if (password) {
+			const [user] = await db.select().from(users).where(eq(users.id, tokenRecord.userId)).limit(1);
+			const isPasswordValid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+			if (!user || !isPasswordValid) {
+				throw new ApiError(401, "Invalid credentials");
+			}
+		}
+
 		await db.transaction(async (tx) => {
 			await tx.delete(refreshTokens).where(eq(refreshTokens.token, refreshToken));
 			await tx.delete(users).where(eq(users.id, payload.userId));
@@ -184,6 +242,14 @@ export async function deleteUserService(refreshToken: string): Promise<void> {
 	} catch (error) {
 		if (error instanceof ApiError) {
 			throw error;
+		}
+
+		if (error instanceof jwt.TokenExpiredError) {
+			throw new ApiError(401, "Refresh token has expired");
+		}
+
+		if (error instanceof jwt.JsonWebTokenError) {
+			throw new ApiError(403, "Invalid refresh token");
 		}
 
 		throw new ApiError(500, "Error occurred while deleting user", null, error);

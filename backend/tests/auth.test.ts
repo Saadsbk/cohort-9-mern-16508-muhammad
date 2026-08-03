@@ -1,9 +1,12 @@
+process.env.NODE_ENV = "test";
 import supertest from "supertest";
 import { assert } from "chai";
 import app from "../src/app.ts";
-import { db } from "../src/index.ts";
+import { db, closeDb } from "../src/index.ts";
 import { users } from "../src/db/schema/schema.ts";
 import { eq } from "drizzle-orm";
+import type { ApiResponse } from "../src/utils/apiResponse.ts";
+import type { SignInResult, SignUpResult } from "../src/services/auth.service.ts";
 
 describe("Authentication API Integration Test Suite", () => {
 
@@ -18,8 +21,11 @@ describe("Authentication API Integration Test Suite", () => {
 	let createdUserId = "";
 
 	after(async () => {
-		// Clean up created user after tests complete
-		await db.delete(users).where(eq(users.id, createdUserId));
+		// Clean up created user after tests complete only when createdUserId is populated
+		if (createdUserId) {
+			await db.delete(users).where(eq(users.id, createdUserId));
+		}
+		await closeDb();
 	});
 	
 	describe("POST /api/auth/sign-up", () => {
@@ -29,10 +35,13 @@ describe("Authentication API Integration Test Suite", () => {
 				.post("/api/auth/sign-up")
 				.send(testUser);
 	
+			const body = res.body as ApiResponse<SignUpResult>;
 			assert.strictEqual(res.status, 201);
-			assert.strictEqual(res.body.success, true);
-			assert.isString(res.body.data.userId);
-			createdUserId = res.body.data.userId;
+			assert.strictEqual(body.success, true);
+			if (body.success) {
+				assert.isString(body.data.userId);
+				createdUserId = body.data.userId;
+			}
 		});
 
 		it("[EDGE CASE] Should reject sign up when confirmPassword does not match", async () => {
@@ -43,9 +52,10 @@ describe("Authentication API Integration Test Suite", () => {
 					confirmPassword: "TestPassword",
 				});
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 400);
-			assert.strictEqual(res.body.success, false);
-			assert.isOk(res.body.message);
+			assert.strictEqual(body.success, false);
+			assert.isOk(body.message);
 		});
 
 
@@ -54,8 +64,9 @@ describe("Authentication API Integration Test Suite", () => {
 				.post("/api/auth/sign-up")
 				.send(testUser);
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 400);
-			assert.strictEqual(res.body.success, false);
+			assert.strictEqual(body.success, false);
 		});
 	});
 
@@ -69,9 +80,12 @@ describe("Authentication API Integration Test Suite", () => {
 					password: testUser.password,
 				});
 
+			const body = res.body as ApiResponse<Omit<SignInResult, "refreshToken">>;
 			assert.strictEqual(res.status, 200);
-			assert.strictEqual(res.body.success, true);
-			assert.isString(res.body.data.accessToken);
+			assert.strictEqual(body.success, true);
+			if (body.success) {
+				assert.isString(body.data.accessToken);
+			}
 
 			const cookies = res.get("Set-Cookie") as string[];
 			assert.isTrue(cookies.some((c: string) => c.startsWith("refreshToken=")));
@@ -88,8 +102,9 @@ describe("Authentication API Integration Test Suite", () => {
 					password: "TestPassword123",
 				});
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 400);
-			assert.strictEqual(res.body.success, false);
+			assert.strictEqual(body.success, false);
 		});
 
 		it("[EDGE CASE] Should reject HTTP request when username exceeds maximum length (> 30 chars)", async () => {
@@ -100,8 +115,9 @@ describe("Authentication API Integration Test Suite", () => {
 					password: "TestPassword123",
 				});
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 400);
-			assert.strictEqual(res.body.success, false);
+			assert.strictEqual(body.success, false);
 		});
 
 		it("[EDGE CASE] Should reject HTTP request when password is below minimum length (< 8 chars)", async () => {
@@ -112,8 +128,9 @@ describe("Authentication API Integration Test Suite", () => {
 					password: "small",
 				});
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 400);
-			assert.strictEqual(res.body.success, false);
+			assert.strictEqual(body.success, false);
 		});
 
 		it("[EDGE CASE] Should reject sign in with incorrect password", async () => {
@@ -124,22 +141,28 @@ describe("Authentication API Integration Test Suite", () => {
 					password: "TestPassword",
 				});
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 401);
-			assert.strictEqual(res.body.success, false);
+			assert.strictEqual(body.success, false);
 		});
 
 	});
 
 	describe("POST /api/auth/refresh-token", () => {
 		
-		it("[BASE CASE] Should successfully refresh access token using valid refresh cookie", async () => {
+		it("[BASE CASE] Should successfully refresh access token using valid refresh cookie and reject pre-rotation token reuse", async () => {
+			const preRotationCookie = refreshTokenCookie;
+
 			const res = await supertest(app)
 				.post("/api/auth/refresh-token")
 				.set("Cookie", [refreshTokenCookie]);
 
+			const body = res.body as ApiResponse<{ accessToken: string }>;
 			assert.strictEqual(res.status, 200);
-			assert.strictEqual(res.body.success, true);
-			assert.isString(res.body.data.accessToken);
+			assert.strictEqual(body.success, true);
+			if (body.success) {
+				assert.isString(body.data.accessToken);
+			}
 
 			const cookies = res.get("Set-Cookie");
 			if (cookies && cookies.length > 0) {
@@ -148,25 +171,43 @@ describe("Authentication API Integration Test Suite", () => {
 					refreshTokenCookie = newCookie;
 				}
 			}
+
+			// Assert that reusing the pre-rotation cookie returns 403
+			const oldCookieRes = await supertest(app)
+				.post("/api/auth/refresh-token")
+				.set("Cookie", [preRotationCookie]);
+
+			assert.strictEqual(oldCookieRes.status, 403);
+			assert.strictEqual((oldCookieRes.body as ApiResponse<null>).success, false);
 		});
 
 		it("[EDGE CASE] Should reject token refresh when refresh cookie is missing", async () => {
 			const res = await supertest(app).post("/api/auth/refresh-token");
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 401);
-			assert.strictEqual(res.body.success, false);
+			assert.strictEqual(body.success, false);
 		});
 
 	});
 
 	describe("POST /api/auth/logout", () => {
 
-		it("[BASE CASE] Should successfully log out user and clear refresh token cookie", async () => {
+		it("[BASE CASE] Should successfully log out user and clear refresh token cookie, revoking subsequent refresh requests", async () => {
 			const res = await supertest(app)
 				.post("/api/auth/logout")
 				.set("Cookie", [refreshTokenCookie]);
 
+			const body = res.body as ApiResponse<null>;
 			assert.strictEqual(res.status, 200);
-			assert.strictEqual(res.body.success, true);
+			assert.strictEqual(body.success, true);
+
+			// Assert that using the logged-out refreshTokenCookie returns 403
+			const loggedOutRes = await supertest(app)
+				.post("/api/auth/refresh-token")
+				.set("Cookie", [refreshTokenCookie]);
+
+			assert.strictEqual(loggedOutRes.status, 403);
+			assert.strictEqual((loggedOutRes.body as ApiResponse<null>).success, false);
 		});
 	});
 });

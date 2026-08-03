@@ -5,6 +5,7 @@ import apiRouter from "./routes/index.ts";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.ts";
 import helmet from "helmet";
 import cookieParser from 'cookie-parser';
+import { env } from "./utils/env.ts";
 
 dotenv.config();
 
@@ -30,11 +31,12 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 
-const PORT = process.env.PORT ?? "3000";
+const PORT = env.PORT;
+const isTestEnv = env.NODE_ENV === "test" || process.argv.some((arg) => arg.includes("mocha"));
 
-if (process.env.NODE_ENV !== "test") {
+if (!isTestEnv) {
 	app.listen(PORT, () => {
-		console.log(`Server running at BACKEND_URL : ${process.env.BACKEND_URL}`);
+		console.log(`Server running at BACKEND_URL : ${env.BACKEND_URL}`);
 	});
 }
 

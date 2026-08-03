@@ -18,13 +18,21 @@ import {
 } from "../services/auth.service.ts";
 import { ApiError } from "../utils/apiError.ts";
 import { REFRESH_TOKEN_MAX_AGE_MS } from "../utils/jwt.ts";
+import { env } from "../utils/env.ts";
 
 const getCookieOptions = (): CookieOptions => ({
 	httpOnly: true,
-	secure: process.env.NODE_ENV === "production",
-	sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+	secure: env.NODE_ENV === "production",
+	sameSite: env.NODE_ENV === "production" ? "none" : "lax",
 	maxAge: REFRESH_TOKEN_MAX_AGE_MS,
 });
+
+const validateRequestOrigin = (req: Request): void => {
+	const origin = req.headers.origin;
+	if (origin && origin !== env.FRONTEND_URL) {
+		throw new ApiError(403, "Invalid request origin");
+	}
+};
 
 /**
  * Handles user sign-in requests.
@@ -71,7 +79,16 @@ export const signUpController = async (
 	}
 };
 
+// handle the case where a user passes an Object or a Number as a cookie
+const readRefreshToken = (req: Request): string | null => {
+	const token = req.cookies?.refreshToken;
 
+	if (typeof token === "string" && token.trim().length > 0) {
+		return token;
+	}
+
+	return null;
+};
 
 export const refreshTokenController = async (
 	req: Request,
@@ -79,8 +96,8 @@ export const refreshTokenController = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {		
-		const refreshToken = req.cookies.refreshToken;
-		// console.log("Refresh Token from Cookie:", refreshToken);	
+		validateRequestOrigin(req);
+		const refreshToken = readRefreshToken(req);
 		
 		if (!refreshToken) {
 			throw new ApiError(401, "Refresh token not provided");
@@ -105,7 +122,8 @@ export const logoutController = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {		
-		const refreshToken = req.cookies.refreshToken;
+		validateRequestOrigin(req);
+		const refreshToken = req.cookies?.refreshToken;
 
 		if (refreshToken) {
 			await logoutService(refreshToken);
@@ -120,18 +138,20 @@ export const logoutController = async (
 };
 
 export const deleteUserController = async (
-	req: Request,
+	req: Request<Record<string, never>, unknown, { password: string }>,
 	res: Response<ApiResponse<null>>,
 	next: NextFunction,
 ): Promise<void> => {
 	try {
-		const refreshToken = req.cookies.refreshToken;
+		validateRequestOrigin(req);
+		const refreshToken = req.cookies?.refreshToken;
 
 		if (!refreshToken) {
 			throw new ApiError(401, "Refresh token not provided");
 		}
 
-		await deleteUserService(refreshToken);
+		const password = typeof req.body?.password === "string" ? req.body.password : "";
+		await deleteUserService(refreshToken, password);
 
 		const { httpOnly, secure, sameSite } = getCookieOptions();
 		res.clearCookie("refreshToken", { httpOnly, secure, sameSite });
