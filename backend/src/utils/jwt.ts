@@ -23,11 +23,11 @@ function assertTokenPayload(decoded: unknown): TokenPayload {
 
 export { ACCESS_TOKEN_EXPIRY, REFRESH_TOKEN_EXPIRY, REFRESH_TOKEN_MAX_AGE_MS };
 
-export function generateAccessToken(userId: string) {
+export function generateAccessToken(userId: string): string {
 	return jwt.sign({ userId }, ACCESS_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 }
 
-export function generateRefreshToken(userId: string) {
+export function generateRefreshToken(userId: string): string {
 	return jwt.sign({ userId, jti: crypto.randomUUID() }, REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
 } // Added jti for edge cases where 2 tokens (for the same user) are generated at the same thime
 
