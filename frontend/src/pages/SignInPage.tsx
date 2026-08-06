@@ -25,10 +25,19 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, XCircleIcon } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
+import useAuth from "@/store/auth";
 
 export default function SignInPage() {
 	const [showPassword, setShowPassword] = useState(false);
+	const navigate = useNavigate();
+	const location = useLocation();
+	const fromLocation = (location.state as { from?: Location })?.from;
+	const from = fromLocation
+		? `${fromLocation.pathname}${fromLocation.search || ""}`
+		: "/home";
+	const login = useAuth((state)=>state.actions.login)
+	// const logStore = useAuth((state)=>state.actions.logStore)
 
 	const form = useForm<SignInFormValues>({
 		resolver: zodResolver(signInSchema),
@@ -40,11 +49,14 @@ export default function SignInPage() {
 
 	const mutation = useMutation({
 		mutationFn: signInUser,
-		onSuccess: () => {
+		onSuccess: (data) => {
+			login(data.accessToken, data.user);
 			toast.add({
 				title: "Signed in successful",
 				type: "success",
 			});
+			// logStore();
+			navigate(from, { replace: true });
 		},
 		onError: (error) => {
 			toast.add({
@@ -58,7 +70,6 @@ export default function SignInPage() {
 	function onSubmit(data: SignInFormValues) {
 		mutation.mutate(data);
 	}
-	const navigate = useNavigate();
 	return (
 		<BackgroundLayout>
 			<Card className="w-full sm:max-w-md bg-black/75 text-stone-200 backdrop-blur-md rounded-2xl">

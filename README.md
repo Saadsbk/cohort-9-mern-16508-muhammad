@@ -3,10 +3,17 @@ Cohort 9 — MERN (NodeJS+ReactJS) assignment for Muhammad Saad Bin Khalid
 
 ## Completed Basic Setup 
 - Frontend: 
-	- Initialized ReactJS app using Vite and cleaned up the default files.
-	- Created a landing page to display the basic information of the application with Sign In and Sign Up buttons.
-	- Created a Background Layout component to display the background of the application.
-	- Created Sign In and Sign Up pages with validation using React Hook Form and Zod.
+	- Initialized ReactJS app using Vite and cleaned up the default boilerplate files.
+	- Created a landing page to display basic application information with Sign In and Sign Up navigation buttons.
+	- Created a reusable Background Layout component for themed/glassmorphic pages.
+	- Created Sign In and Sign Up pages with form validation using React Hook Form and Zod.
+	- Customized CSS variables and design tokens using [tweakcn.com](https://tweakcn.com/).
+	- Utilized an in-memory Zustand store to hold accessToken and user state securely.
+	- Established connection with the backend for silent session restoration and accessToken re-fetching via refresh tokens in httpOnly cookies.
+	- Built Home Dashboard with responsive layout, smart user navigation, and theme toggling (Light/Dark mode).
+	- Integrated URL query parameter search (`?search=...`) for note title filtering with shareable & persisted URLs.
+	- Developed `NotesCard` component and `NotesCardPopover` menu for note renaming and deletion.
+	- Implemented instant inline theme initialization script in `index.html` to eliminate theme flicker on page load/refresh.
 
 - Backend:
 	- Initialized Express server (`app.ts`) with CORS, TypeScript strict type checking, and TSDoc documentation.

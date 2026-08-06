@@ -5,6 +5,32 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Notely</title>
+    <script>
+      (function() {
+        try {
+          const theme = localStorage.getItem("theme");
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: 100vh;
+        background-color: oklch(0.9308 0.0207 91.5898);
+        color: oklch(0.3760 0.0225 64.3434);
+      }
+      html.dark, html.dark body {
+        background-color: oklch(0.2747 0.0139 57.6523);
+        color: oklch(0.9239 0.0190 83.0636);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
