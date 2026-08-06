@@ -40,12 +40,8 @@ const useAuth = create<AuthState>((set) => ({
 			console.log("User: ", useAuth.getState()?.user);
 		},
 		storeCreated: (): boolean => {
-			return (
-				useAuth.getState()?.accessToken !== null &&
-				useAuth.getState()?.user?.id !== null &&
-				useAuth.getState()?.user?.email !== null &&
-				useAuth.getState()?.user?.username !== null
-			);
+			const { accessToken, user } = useAuth.getState();
+			return Boolean(accessToken && user?.id && user.email && user.username);
 		},
 		setLoading: (isLoading) => set({ isLoading }),
 	},

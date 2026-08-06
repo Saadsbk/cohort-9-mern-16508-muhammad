@@ -135,6 +135,7 @@ export default function NotesCardPopover({
 						/>
 						<div className="flex items-center justify-end gap-1.5 pt-1">
 							<Button
+								type="button"
 								variant="secondary"
 								size="sm"
 								disabled={isSubmitting}
@@ -148,6 +149,7 @@ export default function NotesCardPopover({
 								Cancel
 							</Button>
 							<Button
+								type="submit"
 								size="sm"
 								disabled={isSubmitting}
 								className="h-7 text-xs px-2.5 font-medium"

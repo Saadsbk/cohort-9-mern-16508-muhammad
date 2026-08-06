@@ -3,7 +3,10 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 import useAuth from "@/store/auth";
 import type { ApiSuccessResponse } from "@/types";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "";
+if (!BACKEND_URL && import.meta.env.PROD) {
+	throw new Error("VITE_BACKEND_URL is not configured.");
+}
 
 interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
 	_retry?: boolean;
@@ -11,8 +14,35 @@ interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
 
 const api = axios.create({
 	baseURL: BACKEND_URL,
+	timeout: 15000,
 	withCredentials: true, // Send HttpOnly cookies (e.g. refreshToken)
 });
+
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+	if (!refreshPromise) {
+		refreshPromise = (async () => {
+			try {
+				const response = await axios.post<
+					ApiSuccessResponse<{ accessToken: string }>
+				>(
+					`${BACKEND_URL}/api/auth/refresh-token`,
+					{},
+					{ withCredentials: true },
+				);
+
+				return response.data.data.accessToken;
+			} catch (error) {
+				throw error;
+			} finally {
+				refreshPromise = null;
+			}
+		})();
+	}
+
+	return refreshPromise;
+}
 
 // Attach Zustand access token to every outgoing request
 api.interceptors.request.use(
@@ -23,8 +53,15 @@ api.interceptors.request.use(
 		}
 		return config;
 	},
-	function (error) {
-		console.log("Request Error: ", error);
+	function (error: AxiosError) {
+		if (import.meta.env.DEV) {
+			console.log("Request Error: ", {
+				message: error.message,
+				status: error.response?.status,
+				method: error.config?.method,
+				url: error.config?.url,
+			});
+		}
 		return Promise.reject(error);
 	},
 );
@@ -35,7 +72,14 @@ api.interceptors.response.use(
 		return response;
 	},
 	async function (error: AxiosError) {
-		console.log("Response Error: ", error);
+		if (import.meta.env.DEV) {
+			console.log("Response Error: ", {
+				message: error.message,
+				status: error.response?.status,
+				method: error.config?.method,
+				url: error.config?.url,
+			});
+		}
 
 		const originalRequest = error.config as CustomAxiosRequestConfig | undefined;
 
@@ -47,19 +91,14 @@ api.interceptors.response.use(
 
 		if (
 			error.response?.status === 401 &&
-			originalRequest && !originalRequest._retry &&
+			originalRequest &&
+			!originalRequest._retry &&
 			!isAuthEndpoint
 		) {
 			originalRequest._retry = true;
 
 			try {
-				const response = await axios.post<ApiSuccessResponse<{ accessToken: string }>>(
-					`${BACKEND_URL}/api/auth/refresh-token`,
-					{},
-					{ withCredentials: true },
-				);
-
-				const newAccessToken = response.data.data.accessToken;
+				const newAccessToken = await refreshAccessToken();
 
 				// Update Zustand store with the new access token
 				useAuth.getState().actions.setAccessToken(newAccessToken);

@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import useAuth from "@/store/auth";
 import api from "@/api/axiosClient";
@@ -24,7 +25,9 @@ export function useAuthSession() {
 				}
 				return res.data;
 			} catch (err) {
-				logout();
+				if (axios.isAxiosError(err) && err.response?.status === 401) {
+					logout();
+				}
 				throw err;
 			}
 		},

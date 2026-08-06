@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, XCircleIcon } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate, type Location } from "react-router";
 import useAuth from "@/store/auth";
 
 export default function SignInPage() {

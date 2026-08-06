@@ -1,6 +1,6 @@
-import { Loader2 } from "lucide-react";
-import { Navigate, Outlet, useLocation } from "react-router";
+import { Navigate, Outlet, useLocation, type Location } from "react-router";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import FullScreenLoader from "@/components/custom/FullScreenLoader";
 
 export const GuestRoute = () => {
 	const location = useLocation();
@@ -12,12 +12,7 @@ export const GuestRoute = () => {
 		: "/home";
 
 	if (isRefreshing) {
-		return (
-			<div className="flex items-center justify-center min-h-screen bg-background text-foreground text-lg font-medium gap-3">
-				<Loader2 className="h-6 w-6 animate-spin text-primary" />
-				Loading...
-			</div>
-		);
+		return <FullScreenLoader />;
 	}
 
 	if (accessToken) {
